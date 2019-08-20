@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#6DBDF0</color>
+    <color name="colorPrimaryDark">#000000</color>
+    <color name="colorAccent">#000000</color>
+    <color name="colorDelete">#FA6666</color>
+    <color name="textColor">#1F1E1E</color>
+    <color name="colorDeleteIcon">#FA6666</color>
+</resources>
