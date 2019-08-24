@@ -1,35 +1,37 @@
 package com.example.notes
 
-import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.support.v4.content.ContextCompat
-import android.support.v7.app.ActionBar
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.support.v7.widget.helper.ItemTouchHelper
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.Adapter
 import com.example.notes.Adapter.AdapterNote
-import com.example.notes.DataBase.DBHelper
+import com.example.notes.Authentication.AuthenticationActivity
 import com.example.notes.Note.Note
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.stream.Collectors
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var myAdapter: AdapterNote
     private lateinit var colorDrawableBackground: ColorDrawable
     private lateinit var deleteIcon: Drawable
-    private val items = ArrayList<Note>()
+    private var items = ArrayList<Note>()
+    private var user= FirebaseAuth.getInstance().currentUser
+    private val ref= FirebaseDatabase.getInstance().getReference(user!!.uid)
+    private var firebaseUser=FirebaseAuth.getInstance()
+    private lateinit var dbRef:DatabaseReference
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,13 +39,19 @@ class MainActivity : AppCompatActivity() {
 
         val rv = findViewById<RecyclerView>(R.id.rv)
 
+        dbRef=ref.ref
+
         rv.layoutManager = LinearLayoutManager(this) as RecyclerView.LayoutManager?
 
         showAllNoteDB()
 
+        updateList()
+
         sortDate(items)
 
         items.reverse()
+
+
 
         myAdapter = AdapterNote(items, object : AdapterNote.CallBack {
 
@@ -51,7 +59,7 @@ class MainActivity : AppCompatActivity() {
 
                 var intent = Intent(applicationContext, NoteActivity::class.java)
                 intent.putExtra(NoteActivity.ID_TEXT, item.id)
-                intent.putExtra(NoteActivity.LIST_SIZE, items.size)
+                intent.putExtra(NoteActivity.NOTE,item)
                 intent.putExtra(NoteActivity.INTENT_STATUS, true)
                 startActivity(intent)
 
@@ -114,6 +122,7 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     override fun onSwiped(p0: RecyclerView.ViewHolder, p1: Int) {
+
                         (myAdapter as AdapterNote).removeItem(applicationContext, p0.adapterPosition, p0)
                     }
 
@@ -129,9 +138,9 @@ class MainActivity : AppCompatActivity() {
             val itemTouchHelper = ItemTouchHelper(itemTouchHelperCallBack)
             itemTouchHelper.attachToRecyclerView(rv)
 
+        rv.adapter = myAdapter
         myAdapter.notifyDataSetChanged()
 
-        rv.adapter = myAdapter
 
     }
 
@@ -148,50 +157,42 @@ class MainActivity : AppCompatActivity() {
 
                 var addIntent = Intent(applicationContext, NoteActivity::class.java)
 
-                var size = items.size
-
-                if(size!=0){
+                if(!items.isEmpty()){
                     addIntent.putExtra(NoteActivity.LAST_ID,sortId(items))
                 }
 
-                addIntent.putExtra(NoteActivity.LIST_SIZE, size)
-
                 startActivity(addIntent)
                 return true
+            }
+
+            R.id.log_out_menu->{
+                firebaseUser.signOut()
+                startActivity(Intent(applicationContext,AuthenticationActivity::class.java))
+
             }
         }
         return super.onOptionsItemSelected(item)
     }
 
     private fun showAllNoteDB() {
-        var idNote: Int
-        var name: String
-        var text: String
-        var date: String
-        val dbHandler = DBHelper(this, null)
-        val cursor = dbHandler.getAllNote()
+        ref.addValueEventListener(object : ValueEventListener {
+            override fun onCancelled(p0: DatabaseError) {
+            }
 
-        cursor!!.moveToFirst()
+            override fun onDataChange(p0: DataSnapshot) {
 
-        try {
-            idNote = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_ID)))).toInt()
-            name = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_NAME))))
-            text = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_TEXT))))
-            date = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_DATE))))
-            items.add(Note(idNote, name, text, date))
-        }catch (e:Exception){
-            Log.i("ERROR","Error")
-        }
-        while (cursor!!.moveToNext()) {
-            idNote = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_ID)))).toInt()
-            name = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_NAME))))
-            text = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_TEXT))))
-            date = ((cursor.getString(cursor.getColumnIndex(DBHelper.COLUMN_DATE))))
-            items.add(Note(idNote, name, text, date))
- }
-        cursor!!.close()
-        dbHandler.close()
+                if (p0!!.exists()) {
+                    for (i in p0.children) {
+                        val noteItem = i.getValue(Note::class.java)
+                        items.add(noteItem!!)
+                    }
+                }
+            }
+        })
+
     }
+
+
 
     private fun sortDate(items:ArrayList<Note>):ArrayList<Note>{
 
@@ -227,6 +228,36 @@ class MainActivity : AppCompatActivity() {
         listId.sort()
 
         return listId.last()
+    }
+
+    private fun updateList(){
+        GlobalScope.launch {
+            delay(1000)
+                dbRef.addChildEventListener(object : ChildEventListener {
+                    override fun onCancelled(p0: DatabaseError) {
+                    }
+
+                    override fun onChildMoved(p0: DataSnapshot, p1: String?) {
+
+                    }
+
+                    override fun onChildChanged(p0: DataSnapshot, p1: String?) {
+
+                    }
+
+                    override fun onChildAdded(p0: DataSnapshot, p1: String?) {
+                       // showAllNoteDB()
+                        myAdapter.notifyDataSetChanged()
+
+                    }
+
+                    override fun onChildRemoved(p0: DataSnapshot) {
+                        items.clear()
+                        myAdapter.notifyDataSetChanged()
+                    }
+
+                })
+            }
     }
 
 }

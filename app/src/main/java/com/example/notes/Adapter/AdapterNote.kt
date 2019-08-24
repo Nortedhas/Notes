@@ -4,14 +4,14 @@ import android.content.Context
 import android.graphics.Color
 import android.support.design.widget.Snackbar
 import android.support.v7.widget.RecyclerView
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import com.example.notes.DataBase.DBHelper
 import com.example.notes.Note.Note
 import com.example.notes.R
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 
 
 class AdapterNote(var items:ArrayList<Note>,val callback: CallBack): RecyclerView.Adapter<AdapterNote.MyViewHolder>(){
@@ -22,7 +22,9 @@ class AdapterNote(var items:ArrayList<Note>,val callback: CallBack): RecyclerVie
 
     private var removedPosition: Int = 0
     private var removedItem: Note = Note(0,"","","")
-    private lateinit  var dbHandler:DBHelper
+    private val user= FirebaseAuth.getInstance().currentUser
+    private val ref= FirebaseDatabase.getInstance().getReference(user!!.uid)
+
 
     override fun onBindViewHolder(p0: MyViewHolder, p1: Int) {
         p0.bind(items[p1])
@@ -52,24 +54,28 @@ class AdapterNote(var items:ArrayList<Note>,val callback: CallBack): RecyclerVie
 
     fun removeItem(contex:Context, position:Int, viewHolder:RecyclerView.ViewHolder) {
 
-            dbHandler = DBHelper(contex, null)
-            removedItem = items[position]
-            removedPosition = position
+        removedItem = items[position]
+        removedPosition = position
 
-            dbHandler.deleteNote(removedItem.id)
-            items.removeAt(position)
-            notifyItemRemoved(position)
+        notifyItemRemoved(removedPosition)
+        deleteNote(removedItem)
 
         Snackbar.make(viewHolder.itemView, "${removedItem.name} removed", Snackbar.LENGTH_LONG).setAction("UNDO") {
-            items.add(removedPosition, removedItem)
-            dbHandler.addNote(removedItem)
-            notifyItemInserted(removedPosition)
+
+            items.clear()
+            notifyDataSetChanged()
+
+            saveNote(removedItem)
+
         }.setActionTextColor(Color.WHITE)
             .show()
 
-
-
-
+    }
+    private fun saveNote(note:Note){
+        ref.child(note.id.toString()).setValue(note)
+    }
+    private fun deleteNote(note:Note){
+        ref.child(note.id.toString()).removeValue()
     }
 }
 
